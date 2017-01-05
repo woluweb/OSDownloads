@@ -12,8 +12,9 @@ defined('_JEXEC') or die();
 
 use Alledia\Framework\Factory;
 use Alledia\Framework\Joomla\Table\Base as BaseTable;
-use Alledia\OSDownloads\Free\MailChimpAPI;
+use Mailchimp\Mailchimp;
 use JEventDispatcher;
+use Exception;
 
 
 class Email extends BaseTable
@@ -36,10 +37,23 @@ class Email extends BaseTable
         $listId = $params->get("list_id", 0);
 
         if (!empty($this->email)) {
+            $mc = new Mailchimp($apiKey);
 
-            $mc = new MailChimpAPI($apiKey);
-            $mergeVars = array();
-            $mc->listSubscribe($listId, $this->email, $mergeVars);
+            // Check if the email already exists
+            try {
+                $result = $mc->get("lists/{$listId}/members/" . md5(strtolower($this->email)));
+                $result = $result->toArray();
+            } catch (Exception $e) {
+                $result = array('status' => 'unsubscribed');
+            }
+
+            if ($result['status'] === 'unsubscribed') {
+                // The email is not subscribed. Let's subscribe it.
+                $mc->post("lists/{$listId}/members/", array(
+                    'email_address' => $this->email,
+                    'status'        => 'subscribed'
+                ));
+            }
         }
     }
 
